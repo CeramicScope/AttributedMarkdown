@@ -45,7 +45,7 @@ static NSMutableArray *endnotes = nil; /* List of endnotes to print after main c
 static int notenumber = 0;  /* Number of footnote. */
 
 /* pad - add newlines if needed */
-__unused static void pad(NSMutableString *out, int num) {
+static void pad(NSMutableString *out, int num) {
     while (num-- > padded)
         [out appendString:@"\n"];
     padded = num;
@@ -59,7 +59,7 @@ __unused static void pad(NSMutableString *out, int num) {
 
 /* print_html_string - print string, escaping for HTML  
  * If obfuscate selected, convert characters to hex or decimal entities at random */
-__unused static void print_html_string(NSMutableString *out, NSString *str, bool obfuscate) {
+static void print_html_string(NSMutableString *out, NSString *str, bool obfuscate) {
   NSUInteger i;
   unichar ch;
   for (i = 0; i < str.length; ++i) {
@@ -161,7 +161,7 @@ static void print_attr_element_list(NSMutableAttributedString *out, element *lis
 
 
 /* add_endnote - add an endnote to global endnotes list. */
-__unused static void add_endnote(element *elt) {
+static void add_endnote(element *elt) {
     if (endnotes == nil)
         endnotes = [[NSMutableArray alloc] init];
    [endnotes insertObject:[NSValue valueWithPointer:(const void*)elt] atIndex:0];
@@ -187,13 +187,10 @@ static void print_attr_element(NSMutableAttributedString *out, element *elt, NSD
             print_attr_element_list(out, elt->children, attributes, current);
             print_attr_string(out, @"\u201D",current);
             break;
-        case CODE:
-            print_attr_string(out, elt->contents.str, merge(current, attributes[elt->key]));
-            break;
         case HTML:
             //[out appendFormat:@"%@", elt->contents.str];
             break;
-        case LINK:;
+        case LINK: {
             NSURL *url = [NSURL URLWithString:elt->contents.link->url];
             if (url) {
                 NSDictionary *linkAttibutes = @{@"attributedMarkdownURL": url};
@@ -204,9 +201,22 @@ static void print_attr_element(NSMutableAttributedString *out, element *elt, NSD
                 print_attr_string(out, [NSString stringWithFormat: @" (%@)", elt->contents.link->url], current);
             }
             break;
-        case IMAGE:
-            // NOT CURRENTLY SUPPORTED
+        }
+        case IMAGE:{
+            NSURL *url = [NSURL URLWithString:elt->contents.link->url];
+            if (url) {
+                NSDictionary *linkAttibutes = @{@"attributedMarkdownURL": url};
+                // DNReader additions
+//                print_attr_element_list(out, elt->contents.link->label, attributes, merge(current, merge(attributes[elt->key], linkAttibutes)));
+                print_attr_element_list(out, elt->contents.link->label, attributes, merge(current, linkAttibutes));
+                print_attr_string(out, [NSString stringWithFormat: @" (%@)", elt->contents.link->url], current);
+            } else {
+                NSDictionary *attributesBroken = @{NSForegroundColorAttributeName: [TARGET_PLATFORM_COLOR redColor]}; // Make this attributes[BROKEN]
+                print_attr_element_list(out, elt->contents.link->label, attributes, merge(current, attributesBroken));
+                print_attr_string(out, [NSString stringWithFormat: @" (%@)", elt->contents.link->url], current);
+            }
             break;
+        }
         case EMPH: case STRONG:
             print_attr_element_list(out, elt->children, attributes, merge(current, attributes[elt->key]));
             break;
@@ -230,6 +240,9 @@ static void print_attr_element(NSMutableAttributedString *out, element *elt, NSD
             print_attr_element_list(out, elt->children, attributes, merge(current, attributes[elt->key]));
             print_attr_string(out, @"\n",current);
             print_attr_string(out, @"\n",current);
+            break;
+        case CODE:
+            print_attr_string(out, elt->contents.str, merge(current, attributes[elt->key]));
             break;
         case HRULE:         print_attr_string(out, @"\n-----------------------------------------------------\n", merge(current, attributes[elt->key])); break;
         case HTMLBLOCK:     print_attr_string(out, elt->contents.str, merge(current, attributes[elt->key])); break;
